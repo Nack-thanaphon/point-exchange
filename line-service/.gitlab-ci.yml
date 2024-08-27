@@ -1,0 +1,83 @@
+# Define default production namespace
+# But can override from assign ENV_PROD_NAMESPACES variable
+variables:
+  MAJOR_VERSION: "1" # Set this to your desired major version number
+# The push refers to repository [registry.gitlab.com/contactus.work/clinic/line-service]
+
+  # Require assign below variable
+  CI_REGISTRY: "registry.gitlab.com"
+  CI_REGISTRY_IMAGE: "registry.gitlab.com/contactus.work/hlab-api/line-service"
+  CI_REGISTRY_TAG_STAGING: "latest"
+  DEFAULT_NAMESPACES: "line"
+  DEFAULT_DEPLOYMENT_NAME: "line-service"
+  DEFAULT_DEPLOYMENT_LABEL: "app=line-service" 
+
+services:
+  - docker:dind
+
+stages:
+  - build
+  - test
+  - deploy
+  - release
+
+build:
+  # Use the official docker image.
+  image: docker:latest
+  stage: build
+  services:
+    - docker:dind
+  before_script:
+    - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+    - export VERSION="v${MAJOR_VERSION}.$(date +"%y").$((($(date +%-m)-1)/3+1)).$(date +"%j")-build($CI_PIPELINE_ID)"
+    - echo "VERSION=$VERSION" > version.env
+    - echo "VERSION > $VERSION"
+  script:
+    - |
+      if [[ "$CI_COMMIT_BRANCH" == "main" ]]; then
+        tag="latest"
+        echo "Running on production branch : tag = 'latest'"
+      elif [[ "$CI_COMMIT_BRANCH" == "staging" ]]; then
+        tag="$CI_REGISTRY_TAG_STAGING"
+        echo "Running on staging branch : tag = ${CI_REGISTRY_TAG_STAGING}"
+        VERSION="$VERSION beta"
+      else
+        tag="$CI_COMMIT_REF_SLUG"
+        echo "Running on branch '$CI_COMMIT_BRANCH': tag = $tag"
+        echo "Building image '$CI_REGISTRY_IMAGE:${tag}' "
+      fi
+      echo "Generated version number : ${VERSION} "
+
+    - docker build --progress plain --pull -t "$CI_REGISTRY_IMAGE:${tag}" --target production . --build-arg VUE_APP_VERSION="$VERSION"
+    - docker push "$CI_REGISTRY_IMAGE:${tag}"
+  artifacts:
+    reports:
+      dotenv: version.env
+  only:
+    - main
+    - staging
+    - production
+
+deploy:
+  image:
+    name: bitnami/kubectl:latest
+    entrypoint: ['']
+  stage: deploy
+  script:
+    - echo -n $KUBE_CONFIG | base64 -d >  $HOME/.kube/config
+    - echo -n $KUBE_CONFIG | base64 -d
+    - kubectl get deployments
+    - |
+      NAMESPACE="${ENV_NAMESPACES:-${DEFAULT_NAMESPACES}}"
+      DEPLOYMENT_NAME="${ENV_DEPLOYMENT_NAME:-${DEFAULT_DEPLOYMENT_NAME}}"
+
+      IFS=',' read -ra namespaces <<< "${NAMESPACE}" 
+      for (( i=0; i<${#namespaces[@]}; i++ )); do
+        echo "Namespace $((i+1)): ${namespaces[i]}"
+        echo "Deploy ${DEPLOYMENT_NAME} to : ${namespaces[i]} "
+        kubectl rollout restart deployment -l ${DEFAULT_DEPLOYMENT_LABEL} -n ${namespaces[i]}
+      done
+  only:
+    - main
+    - staging
+    - production

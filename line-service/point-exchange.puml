@@ -1,0 +1,35 @@
+@startuml
+actor Client
+actor Admin
+rectangle "WebSocket Server (Express.js)" {
+  participant "Server" as S
+  participant "Worker" as W
+}
+
+queue "Kafka" as K
+database "MongoDB" as DB
+
+Client -> S: Request to redeem points (clientId, points)
+S -> K: Produce exchange message (clientId, points)
+Client <-- S: Show QR code (exchangeId)
+Client -> Admin: Show QR code
+
+Admin -> S: Login
+S --> Admin: Login success
+Admin -> Admin: Open Camera and Scan QR code
+Admin -> S: Scan QR code (exchangeId)
+
+S -> W: Kafka consumer receives message (exchangeId, points)
+W -> DB: Check points in MongoDB (clientId)
+alt Points sufficient
+    W -> DB: Update user points
+    W -> S: Emit exchange-result (success: true, exchangeId)
+    S -> Client: Close modal, show success
+    S -> Admin: Notify success
+else Points insufficient
+    W -> S: Emit exchange-result (success: false, exchangeId)
+    S -> Client: Notify failure
+    S -> Admin: Notify failure
+end
+
+@enduml

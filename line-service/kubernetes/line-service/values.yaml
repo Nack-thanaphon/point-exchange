@@ -1,0 +1,27 @@
+replicaCount: 1
+
+image:
+  repository: registry.gitlab.com/contactus.work/hlab-api/line-service
+  pullPolicy: Always
+  tag: 'latest'
+  registrySecret: 'gitlab-registry-secret'
+
+ingress:
+  host: services.contactus.work
+  path: '/api/line/(.*)'
+  pathType: Prefix
+  bodySize: '100m'
+
+deploymentConfig:
+  containerPort: 3200
+
+configMap:
+  NODE_ENV: production
+  PORT: 3200
+
+secretMap:
+  LINE_CHANNEL_TOKEN: "DME6myuOtSesWAXrcaRGS0RZ/Roqcee00y9hIpiVk4kQW8WN7a4I9fLaUpGV2WqrhvA+/cCU52rCz6sl++7voslaN2ifNyfK6ZTUAf/hexhFWLmYT4zZuPHvboW3RVHGK/BkzbAgAg7Bt7ZZxXubTgdB04t89/1O/w1cDnyilFU="
+  MONGODB_URL: "mongodb+srv://nack:vzSe4M0oM8z68oMj@cluster0.zoaoyw6.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+  KAFKA_URL: "kafka.default.svc.cluster.local:9092"
+  REDIS_URL: "redis://redis.default.svc.cluster.local:6379"
+  CLIENT_URL: 'https://point-ex.vercel.app'
